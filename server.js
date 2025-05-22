@@ -2,96 +2,151 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const compression = require('compression');
-const morgan = require('morgan');
-
-// Import des routes
-const authRoutes = require('./routes/auth');
-const projectRoutes = require('./routes/projects');
-
-// Import des utils
-const { scrapeWebsite } = require('./utils/scraper');
-const { generateVideosForProduct } = require('./utils/videoGenerator');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware de base
-app.use(helmet({
-  contentSecurityPolicy: false  // Désactive CSP pour permettre JavaScript inline
-}));
+// Middleware de base uniquement
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
-app.use(compression());
-app.use(morgan('combined'));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.static('public'));
+app.use(express.json({ limit: '10mb' }));
 
-// Base de données en mémoire (à remplacer par une vraie DB)
+// Base de données en mémoire
 let users = [];
 let projects = [];
 let videos = [];
 
-// Fonction de sauvegarde
-const saveData = async () => {
-  const fs = require('fs').promises;
-  try {
-    await fs.writeFile('data.json', JSON.stringify({ users, projects, videos }, null, 2));
-  } catch (error) {
-    console.log('Sauvegarde échouée:', error.message);
-  }
-};
-
-// Fonction de chargement
-const loadData = async () => {
-  const fs = require('fs').promises;
-  try {
-    const data = await fs.readFile('data.json', 'utf8');
-    const parsed = JSON.parse(data);
-    users = parsed.users || [];
-    projects = parsed.projects || [];
-    videos = parsed.videos || [];
-  } catch (error) {
-    console.log('Chargement des données échoué, utilisation de données vides');
-  }
-};
-
-// Partager les données avec les modules
-const updateModulesData = () => {
-  try {
-    if (authRoutes.setUsers) authRoutes.setUsers(users);
-    if (projectRoutes.setData) projectRoutes.setData(projects, users);
-  } catch (error) {
-    console.log('Erreur partage données:', error.message);
-  }
-};
-
-// Routes API
-app.use('/api/auth', authRoutes);
-app.use('/api/projects', projectRoutes);
-
-// Route de santé (OBLIGATOIRE pour Railway)
+// ROUTE HEALTH CRITIQUE (doit marcher)
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    version: '2.1.0-LITE',
+  console.log('🏥 Healthcheck appelé');
+  res.status(200).json({ 
+    status: 'OK',
     timestamp: new Date().toISOString(),
-    features: ['Authentication', 'Projects', 'Scraping', 'AI Generation'],
-    users: users.length,
-    projects: projects.length,
-    videos: videos.length
+    version: '2.1.0-EMERGENCY',
+    port: PORT,
+    env: process.env.NODE_ENV || 'development'
   });
 });
 
-// Route statistiques
+// Route de test simple
+app.get('/test', (req, res) => {
+  res.json({ message: 'Server is working!', time: new Date().toISOString() });
+});
+
+// Route stats
 app.get('/api/stats', (req, res) => {
   res.json({
-    totalUsers: users.length,
-    availableSlots: Math.max(0, 100 - users.length),
-    totalProjects: projects.length,
-    totalVideos: videos.length,
-    uptime: process.uptime(),
-    memory: process.memoryUsage()
+    users: users.length,
+    projects: projects.length,
+    videos: videos.length,
+    availableSlots: Math.max(0, 100 - users.length)
   });
+});
+
+// Inscription simple
+app.post('/api/signup', async (req, res) => {
+  try {
+    console.log('📝 Tentative inscription:', req.body.email);
+    
+    const { name, email, password, website } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Tous les champs sont requis' });
+    }
+
+    if (users.length >= 100) {
+      return res.status(400).json({ error: 'Limite de 100 utilisateurs atteinte' });
+    }
+
+    if (users.find(u => u.email === email)) {
+      return res.status(400).json({ error: 'Email déjà utilisé' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = {
+      id: Date.now().toString(),
+      name,
+      email,
+      password: hashedPassword,
+      website: website || '',
+      createdAt: new Date().toISOString(),
+      accountNumber: users.length + 1
+    };
+
+    users.push(user);
+
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET || 'fallback-secret-key',
+      { expiresIn: '30d' }
+    );
+
+    console.log(`✅ Utilisateur créé: ${email} (#${user.accountNumber})`);
+
+    res.status(201).json({
+      message: 'Compte créé avec succès',
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        accountNumber: user.accountNumber
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur inscription:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Connexion simple
+app.post('/api/login', async (req, res) => {
+  try {
+    console.log('🔐 Tentative connexion:', req.body.email);
+    
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email et mot de passe requis' });
+    }
+
+    const user = users.find(u => u.email === email);
+    if (!user) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET || 'fallback-secret-key',
+      { expiresIn: '30d' }
+    );
+
+    console.log(`✅ Connexion réussie: ${email}`);
+
+    res.json({
+      message: 'Connexion réussie',
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        accountNumber: user.accountNumber
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur connexion:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
 });
 
 // Page d'accueil
@@ -111,7 +166,7 @@ app.get('/', (req, res) => {
             .hero { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 80px 20px; text-align: center; }
             .container { max-width: 1200px; margin: 0 auto; }
             h1 { font-size: 3rem; margin-bottom: 20px; }
-            .highlight { background: #ff6b6b; padding: 10px 20px; border-radius: 25px; display: inline-block; margin: 20px 0; }
+            .highlight { background: #ff6b6b; padding: 15px 25px; border-radius: 25px; display: inline-block; margin: 20px 0; font-weight: bold; }
             .btn { 
                 background: #ff6b6b; 
                 color: white; 
@@ -128,13 +183,12 @@ app.get('/', (req, res) => {
             .btn:hover { 
                 background: #ff5252; 
                 transform: translateY(-2px);
-                box-shadow: 0 5px 15px rgba(255,107,107,0.4);
             }
             .features { padding: 80px 20px; background: #f8f9fa; }
-            .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; margin-top: 50px; }
+            .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; margin-top: 50px; }
             .feature { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; }
             .stats { background: #2c3e50; color: white; padding: 60px 20px; text-align: center; }
-            .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 30px; margin-top: 40px; }
+            .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; margin-top: 30px; }
             .stat-number { font-size: 2.5rem; font-weight: bold; color: #3498db; }
             .modal { 
                 display: none; 
@@ -151,7 +205,7 @@ app.get('/', (req, res) => {
                 background: white; 
                 padding: 40px; 
                 border-radius: 15px; 
-                max-width: 500px; 
+                max-width: 450px; 
                 width: 90%;
                 position: relative;
             }
@@ -169,11 +223,10 @@ app.get('/', (req, res) => {
                 right: 20px;
                 font-size: 28px; 
                 cursor: pointer;
+                color: #999;
             }
-            @media (max-width: 768px) { 
-                h1 { font-size: 2rem; } 
-                .feature-grid { grid-template-columns: 1fr; } 
-            }
+            .close:hover { color: #333; }
+            .status { background: #27ae60; color: white; padding: 10px 20px; border-radius: 20px; margin: 10px 0; }
         </style>
     </head>
     <body>
@@ -182,37 +235,39 @@ app.get('/', (req, res) => {
                 <h1>🎬 Vidéo Auto</h1>
                 <p style="font-size: 1.3rem; margin-bottom: 30px;">L'IA qui transforme vos produits en vidéos virales</p>
                 
+                <div class="status">✅ Application Opérationnelle - Version d'Urgence</div>
+                
                 <div class="highlight">
                     ⚡ OFFRE LIMITÉE: Plus que ${remainingSlots}/100 comptes GRATUITS À VIE !
                 </div>
                 
-                <button class="btn" id="signupBtn">RÉSERVER MA PLACE GRATUITE</button>
-                <button class="btn" id="loginBtn" style="background: transparent; border: 2px solid white;">Se connecter</button>
+                <button class="btn" onclick="openModal('signup')">RÉSERVER MA PLACE GRATUITE</button>
+                <button class="btn" onclick="openModal('login')" style="background: transparent; border: 2px solid white;">Se connecter</button>
             </div>
         </div>
 
         <div class="features">
             <div class="container">
-                <h2 style="text-align: center; font-size: 2.5rem; color: #333; margin-bottom: 20px;">
-                    🚀 IA de Nouvelle Génération
+                <h2 style="text-align: center; font-size: 2.5rem; color: #333; margin-bottom: 50px;">
+                    🚀 Fonctionnalités Disponibles
                 </h2>
                 
                 <div class="feature-grid">
                     <div class="feature">
-                        <h3>🤖 IA Avancée</h3>
-                        <p>Notre IA analyse vos produits et génère automatiquement des scripts personnalisés</p>
+                        <h3>✅ Inscription</h3>
+                        <p>Système d'inscription et authentification fonctionnel</p>
                     </div>
                     <div class="feature">
-                        <h3>🎨 4 Styles Uniques</h3>
-                        <p>Moderne, Dynamique, Élégant, ou Ludique - Choisissez le style parfait</p>
+                        <h3>✅ Comptes Gratuits</h3>
+                        <p>Limite de 100 utilisateurs gratuits à vie respectée</p>
                     </div>
                     <div class="feature">
-                        <h3>📱 Multi-Réseaux</h3>
-                        <p>Formats optimisés pour TikTok, Instagram Reels et YouTube Shorts</p>
+                        <h3>✅ Sécurité</h3>
+                        <p>Mots de passe hashés et tokens JWT sécurisés</p>
                     </div>
                     <div class="feature">
-                        <h3>⚡ 3 Versions par Produit</h3>
-                        <p>L'IA génère 3 versions différentes pour maximiser vos chances</p>
+                        <h3>🔄 En Développement</h3>
+                        <p>Scraping, génération IA et réseaux sociaux arrivent</p>
                     </div>
                 </div>
             </div>
@@ -220,19 +275,19 @@ app.get('/', (req, res) => {
 
         <div class="stats">
             <div class="container">
-                <h2>📊 Résultats Prouvés</h2>
+                <h2>📊 Statistiques Temps Réel</h2>
                 <div class="stat-grid">
                     <div class="stat">
                         <div class="stat-number">${users.length}</div>
-                        <div>Clients Satisfaits</div>
+                        <div>Utilisateurs</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-number">${projects.length}</div>
-                        <div>Projets Créés</div>
+                        <div class="stat-number">${remainingSlots}</div>
+                        <div>Places Restantes</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-number">${videos.length}</div>
-                        <div>Vidéos Générées</div>
+                        <div class="stat-number">100%</div>
+                        <div>Opérationnel</div>
                     </div>
                 </div>
             </div>
@@ -241,8 +296,8 @@ app.get('/', (req, res) => {
         <!-- Modal Inscription -->
         <div id="signupModal" class="modal">
             <div class="modal-content">
-                <span class="close" id="closeSignup">&times;</span>
-                <h2>🎉 Réservez Votre Place Gratuite</h2>
+                <span class="close" onclick="closeModal('signup')">&times;</span>
+                <h2>🎉 Inscription Gratuite</h2>
                 <form id="signupForm">
                     <div class="form-group">
                         <input type="text" id="signupName" placeholder="Nom complet" required>
@@ -254,9 +309,9 @@ app.get('/', (req, res) => {
                         <input type="password" id="signupPassword" placeholder="Mot de passe" required>
                     </div>
                     <div class="form-group">
-                        <input type="url" id="signupWebsite" placeholder="URL de votre site web (optionnel)">
+                        <input type="url" id="signupWebsite" placeholder="Site web (optionnel)">
                     </div>
-                    <button type="submit" class="btn" style="width: 100%;">CRÉER MON COMPTE GRATUIT</button>
+                    <button type="submit" class="btn" style="width: 100%;">CRÉER MON COMPTE</button>
                 </form>
             </div>
         </div>
@@ -264,7 +319,7 @@ app.get('/', (req, res) => {
         <!-- Modal Connexion -->
         <div id="loginModal" class="modal">
             <div class="modal-content">
-                <span class="close" id="closeLogin">&times;</span>
+                <span class="close" onclick="closeModal('login')">&times;</span>
                 <h2>🔐 Connexion</h2>
                 <form id="loginForm">
                     <div class="form-group">
@@ -279,213 +334,126 @@ app.get('/', (req, res) => {
         </div>
 
         <script>
-            // Elements du DOM
-            const signupModal = document.getElementById('signupModal');
-            const loginModal = document.getElementById('loginModal');
-            const signupBtn = document.getElementById('signupBtn');
-            const loginBtn = document.getElementById('loginBtn');
-            const closeSignup = document.getElementById('closeSignup');
-            const closeLogin = document.getElementById('closeLogin');
-
-            // Ouvrir modals
-            if(signupBtn) {
-                signupBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    signupModal.classList.add('show');
-                });
+            function openModal(type) {
+                document.getElementById(type + 'Modal').classList.add('show');
             }
 
-            if(loginBtn) {
-                loginBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    loginModal.classList.add('show');
-                });
+            function closeModal(type) {
+                document.getElementById(type + 'Modal').classList.remove('show');
             }
 
-            // Fermer modals
-            if(closeSignup) {
-                closeSignup.addEventListener('click', function() {
-                    signupModal.classList.remove('show');
-                });
-            }
+            // Inscription
+            document.getElementById('signupForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const userData = {
+                    name: document.getElementById('signupName').value,
+                    email: document.getElementById('signupEmail').value,
+                    password: document.getElementById('signupPassword').value,
+                    website: document.getElementById('signupWebsite').value
+                };
 
-            if(closeLogin) {
-                closeLogin.addEventListener('click', function() {
-                    loginModal.classList.remove('show');
-                });
-            }
+                try {
+                    const response = await fetch('/api/signup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(userData)
+                    });
 
-            // Fermer en cliquant à l'extérieur
-            window.addEventListener('click', function(event) {
-                if (event.target === signupModal) {
-                    signupModal.classList.remove('show');
-                }
-                if (event.target === loginModal) {
-                    loginModal.classList.remove('show');
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        alert('🎉 Compte créé! Vous êtes le client #' + result.user.accountNumber);
+                        localStorage.setItem('token', result.token);
+                        window.location.reload();
+                    } else {
+                        alert('Erreur: ' + result.error);
+                    }
+                } catch (error) {
+                    alert('Erreur: ' + error.message);
                 }
             });
 
-            // Formulaire d'inscription
-            const signupForm = document.getElementById('signupForm');
-            if(signupForm) {
-                signupForm.addEventListener('submit', async function(e) {
-                    e.preventDefault();
+            // Connexion
+            document.getElementById('loginForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const loginData = {
+                    email: document.getElementById('loginEmail').value,
+                    password: document.getElementById('loginPassword').value
+                };
+
+                try {
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(loginData)
+                    });
+
+                    const result = await response.json();
                     
-                    const userData = {
-                        name: document.getElementById('signupName').value,
-                        email: document.getElementById('signupEmail').value,
-                        password: document.getElementById('signupPassword').value,
-                        website: document.getElementById('signupWebsite').value
-                    };
-
-                    try {
-                        const response = await fetch('/api/auth/signup', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(userData)
-                        });
-
-                        const result = await response.json();
-                        
-                        if (response.ok) {
-                            alert('🎉 Félicitations! Votre compte gratuit à vie a été créé! Vous êtes le client #' + result.user.accountNumber);
-                            localStorage.setItem('token', result.token);
-                            window.location.href = '/dashboard';
-                        } else {
-                            alert('Erreur: ' + result.error);
-                        }
-                    } catch (error) {
-                        alert('Erreur de connexion: ' + error.message);
+                    if (response.ok) {
+                        alert('Connexion réussie!');
+                        localStorage.setItem('token', result.token);
+                        window.location.reload();
+                    } else {
+                        alert('Erreur: ' + result.error);
                     }
-                });
-            }
+                } catch (error) {
+                    alert('Erreur: ' + error.message);
+                }
+            });
 
-            // Formulaire de connexion
-            const loginForm = document.getElementById('loginForm');
-            if(loginForm) {
-                loginForm.addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    
-                    const loginData = {
-                        email: document.getElementById('loginEmail').value,
-                        password: document.getElementById('loginPassword').value
-                    };
-
-                    try {
-                        const response = await fetch('/api/auth/login', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(loginData)
-                        });
-
-                        const result = await response.json();
-                        
-                        if (response.ok) {
-                            localStorage.setItem('token', result.token);
-                            window.location.href = '/dashboard';
-                        } else {
-                            alert('Erreur: ' + result.error);
-                        }
-                    } catch (error) {
-                        alert('Erreur de connexion: ' + error.message);
-                    }
-                });
-            }
-
-            console.log('JavaScript chargé avec succès!');
+            console.log('✅ Application d\\'urgence chargée');
         </script>
     </body>
     </html>
   `);
 });
 
-// Dashboard simple
+// Route de test dashboard
 app.get('/dashboard', (req, res) => {
   res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Dashboard - Vidéo Auto</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8f9fa; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
-            .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
-            .welcome { background: white; border-radius: 15px; padding: 40px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-            .btn { background: #3498db; color: white; padding: 15px 30px; border: none; border-radius: 8px; text-decoration: none; display: inline-block; margin: 10px; cursor: pointer; }
-            .btn:hover { background: #2980b9; }
-            .btn-success { background: #27ae60; }
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>🎉 Bienvenue dans Vidéo Auto !</h1>
-            <p>Votre compte gratuit à vie est activé</p>
-        </div>
-
-        <div class="container">
-            <div class="welcome">
-                <h2>🚀 Application Opérationnelle !</h2>
-                <p style="margin: 20px 0; font-size: 1.2rem;">Toutes les fonctionnalités de base sont maintenant disponibles.</p>
-                
-                <div style="margin: 40px 0;">
-                    <a href="/api/health" class="btn btn-success">🔍 Vérifier l'API</a>
-                    <a href="/api/stats" class="btn">📊 Voir les Stats</a>
-                    <a href="/" class="btn">🏠 Accueil</a>
-                </div>
-                
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 30px;">
-                    <h3>🎯 Prochaines étapes :</h3>
-                    <ol style="text-align: left; margin: 15px 0;">
-                        <li>✅ Application fonctionnelle</li>
-                        <li>✅ Système d'authentification</li>
-                        <li>✅ Base pour projets et scraping</li>
-                        <li>🔄 Interface de création de projets</li>
-                        <li>🔄 Génération de vidéos</li>
-                    </ol>
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
+    <h1>🎉 Dashboard Fonctionnel!</h1>
+    <p>L'application fonctionne correctement.</p>
+    <a href="/">← Retour accueil</a>
+    <br><br>
+    <a href="/api/health">Tester l'API Health</a><br>
+    <a href="/api/stats">Voir les Statistiques</a>
   `);
 });
 
-// Middleware de gestion d'erreurs
+// Gestion d'erreurs
 app.use((err, req, res, next) => {
-  console.error('Erreur serveur:', err);
-  res.status(500).json({ 
-    error: 'Erreur serveur interne',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Une erreur est survenue'
-  });
+  console.error('💥 Erreur serveur:', err);
+  res.status(500).json({ error: 'Erreur serveur', details: err.message });
 });
 
 // Route 404
 app.use((req, res) => {
-  res.status(404).json({ 
-    error: 'Route non trouvée',
-    path: req.path,
-    method: req.method
-  });
+  console.log('🔍 Route non trouvée:', req.path);
+  res.status(404).json({ error: 'Route non trouvée', path: req.path });
 });
-
-// Chargement des données au démarrage
-loadData().then(() => {
-  updateModulesData();
-  console.log(`📊 Données chargées: ${users.length} utilisateurs, ${projects.length} projets`);
-});
-
-// Sauvegarde périodique des données
-setInterval(async () => {
-  await saveData();
-}, 5 * 60 * 1000); // Toutes les 5 minutes
 
 // Démarrage du serveur
-app.listen(PORT, () => {
-  console.log(`🚀 Vidéo Auto v2.1.0-LITE démarré sur le port ${PORT}`);
-  console.log(`📊 ${users.length}/100 utilisateurs inscrits`);
-  console.log(`🔧 Healthcheck disponible sur /api/health`);
-  console.log(`✅ Application prête !`);
+const server = app.listen(PORT, () => {
+  console.log('🚀 ================================');
+  console.log(`🚀 VIDÉO AUTO - VERSION D'URGENCE`);
+  console.log(`🚀 Port: ${PORT}`);
+  console.log(`🚀 Healthcheck: /api/health`);
+  console.log(`🚀 Status: OPÉRATIONNEL ✅`);
+  console.log('🚀 ================================');
+});
+
+// Gestion des erreurs de serveur
+server.on('error', (err) => {
+  console.error('💥 Erreur serveur:', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('💥 Exception non gérée:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('💥 Promesse rejetée:', err);
 });
