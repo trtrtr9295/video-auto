@@ -1,0 +1,25 @@
+[build]
+command = "npm install"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[env]
+NODE_ENV = "production"
+PORT = { from = "PORT", default = "3001" }
+
+[variables]
+# Variables d'environnement requises
+JWT_SECRET = { required = true, description = "Secret key for JWT tokens" }
+OPENAI_API_KEY = { required = false, description = "OpenAI API key for AI script generation" }
+CLOUDINARY_CLOUD_NAME = { required = false, description = "Cloudinary cloud name for video storage" }
+CLOUDINARY_API_KEY = { required = false, description = "Cloudinary API key" }
+CLOUDINARY_API_SECRET = { required = false, description = "Cloudinary API secret" }
+
+[build.watchPatterns]
+include = ["**/*.js", "**/*.json", "**/*.html", "**/*.css"]
+ignore = ["node_modules/**", ".git/**", "data.json", "uploads/**"]
