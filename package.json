@@ -1,20 +1,14 @@
 {
   "name": "video-auto",
   "version": "1.0.0",
-  "description": "Vidéo Auto - Génération IA de vidéos produit",
+  "description": "Vidéo Auto - Système complet avec IA réelle",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "build": "echo 'Build completed'",
     "dev": "node server.js"
   },
-  "keywords": [
-    "video",
-    "automation", 
-    "e-commerce",
-    "saas",
-    "ai"
-  ],
+  "keywords": ["video", "automation", "e-commerce", "saas", "ai"],
   "author": "Vidéo Auto",
   "license": "MIT",
   "engines": {
