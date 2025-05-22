@@ -1,7 +1,7 @@
 {
   "name": "video-auto",
   "version": "1.0.0",
-  "description": "Vidéo Auto - Automatisez vos vidéos produit pour réseaux sociaux. 100 premiers clients GRATUITS À VIE !",
+  "description": "Vidéo Auto - Système complet avec comptes utilisateurs",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,13 +12,7 @@
     "video",
     "automation", 
     "e-commerce",
-    "social-media",
-    "saas",
-    "instagram",
-    "tiktok",
-    "youtube",
-    "reels",
-    "shorts"
+    "saas"
   ],
   "author": "Vidéo Auto",
   "license": "MIT",
