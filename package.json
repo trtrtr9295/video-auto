@@ -1,22 +1,7 @@
 {
-  "name": "video-auto",
-  "version": "1.0.0",
-  "description": "Vidéo Auto - Système complet avec IA réelle",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "build": "echo 'Build completed'",
-    "dev": "node server.js"
-  },
-  "keywords": ["video", "automation", "e-commerce", "saas", "ai"],
-  "author": "Vidéo Auto",
-  "license": "MIT",
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "dependencies": {
     "express": "^4.18.2",
-    "cors": "^2.8.5",
+    "cors": "^2.8.5", 
     "helmet": "^7.1.0",
     "dotenv": "^16.3.1",
     "axios": "^1.5.1",
