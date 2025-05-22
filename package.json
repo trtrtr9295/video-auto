@@ -1,7 +1,7 @@
 {
   "name": "video-auto",
   "version": "1.0.0",
-  "description": "Vidéo Auto - Système complet avec comptes utilisateurs",
+  "description": "Vidéo Auto - Génération IA de vidéos produit",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,7 +12,8 @@
     "video",
     "automation", 
     "e-commerce",
-    "saas"
+    "saas",
+    "ai"
   ],
   "author": "Vidéo Auto",
   "license": "MIT",
@@ -26,6 +27,11 @@
     "dotenv": "^16.3.1",
     "axios": "^1.5.1",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "fluent-ffmpeg": "^2.1.2",
+    "cloudinary": "^1.41.0",
+    "multer": "^1.4.5-lts.1",
+    "sharp": "^0.32.6",
+    "openai": "^4.20.1"
   }
 }
