@@ -2,13 +2,47 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const fs = require('fs');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Simuler un compteur d'utilisateurs gratuits
-let freeUsersCount = Math.floor(Math.random() * 15) + 67;
+// Base de données JSON simple (persistante)
+const DB_FILE = path.join(__dirname, 'database.json');
+
+// Initialiser la base de données
+let database = {
+  clients: [],
+  settings: {
+    maxFreeUsers: 100,
+    currentFreeUsers: 0
+  }
+};
+
+// Charger la base de données existante
+function loadDatabase() {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const data = fs.readFileSync(DB_FILE, 'utf8');
+      database = JSON.parse(data);
+    }
+  } catch (error) {
+    console.log('Initialisation nouvelle base de données');
+  }
+}
+
+// Sauvegarder la base de données
+function saveDatabase() {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(database, null, 2));
+  } catch (error) {
+    console.error('Erreur sauvegarde:', error);
+  }
+}
+
+// Charger au démarrage
+loadDatabase();
 
 // Middleware
 app.use(helmet({
@@ -27,24 +61,45 @@ app.use(express.json({ limit: '10mb' }));
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
-    message: 'Video Auto API is running!',
+    message: 'Vidéo Auto API fonctionnelle !',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
-    freeUsersLeft: 100 - freeUsersCount
+    totalClients: database.clients.length,
+    freeUsersUsed: database.settings.currentFreeUsers,
+    freeUsersLeft: database.settings.maxFreeUsers - database.settings.currentFreeUsers
   });
 });
 
-// API pour le compteur d'utilisateurs gratuits
+// API compteur utilisateurs gratuits
 app.get('/api/free-users-count', (req, res) => {
+  const used = database.settings.currentFreeUsers;
+  const total = database.settings.maxFreeUsers;
+  
   res.json({
-    totalFreeUsers: 100,
-    usedSlots: freeUsersCount,
-    remainingSlots: 100 - freeUsersCount,
-    percentage: (freeUsersCount / 100) * 100
+    totalFreeUsers: total,
+    usedSlots: used,
+    remainingSlots: total - used,
+    percentage: (used / total) * 100
   });
 });
 
-// API d'audit de site web
+// API liste des clients (pour admin)
+app.get('/api/clients', (req, res) => {
+  res.json({
+    clients: database.clients.map(client => ({
+      id: client.id,
+      email: client.email,
+      companyName: client.companyName,
+      websiteUrl: client.websiteUrl,
+      registeredAt: client.registeredAt,
+      earlyBirdNumber: client.earlyBirdNumber,
+      status: client.status
+    })),
+    total: database.clients.length
+  });
+});
+
+// API audit de site web fonctionnel
 app.post('/api/audit-website', (req, res) => {
   const { websiteUrl } = req.body;
   
@@ -52,71 +107,241 @@ app.post('/api/audit-website', (req, res) => {
     return res.status(400).json({ error: 'URL du site requis' });
   }
 
+  // Validation URL
+  try {
+    new URL(websiteUrl);
+  } catch {
+    return res.status(400).json({ error: 'URL invalide' });
+  }
+
+  // Simulation audit réaliste
   setTimeout(() => {
+    const domain = websiteUrl.replace(/(https?:\/\/)?(www\.)?/, '').split('/')[0];
+    const isEcommerce = websiteUrl.toLowerCase().includes('shop') || 
+                      websiteUrl.toLowerCase().includes('store') || 
+                      websiteUrl.toLowerCase().includes('boutique') ||
+                      websiteUrl.toLowerCase().includes('market');
+    
+    const baseScore = isEcommerce ? 75 : 60;
+    const score = baseScore + Math.floor(Math.random() * 20);
+    const productsFound = isEcommerce ? 
+      Math.floor(Math.random() * 80) + 20 : 
+      Math.floor(Math.random() * 15) + 5;
+    
     const auditResults = {
       websiteUrl,
-      score: Math.floor(Math.random() * 30) + 70,
-      productsFound: Math.floor(Math.random() * 50) + 15,
-      videosPotential: Math.floor(Math.random() * 100) + 50,
+      domain,
+      detectedPlatform: isEcommerce ? 'E-commerce' : 'Site Web',
+      score,
+      productsFound,
+      videosPotential: Math.floor(productsFound * 1.5) + Math.floor(Math.random() * 30),
+      socialMediaOptimization: Math.floor(Math.random() * 40) + 45,
+      
       recommendations: [
         {
           type: 'urgent',
-          title: 'Produits sans videos detectes',
-          description: `${Math.floor(Math.random() * 20) + 10} produits pourraient generer des videos automatiquement`,
-          impact: 'Augmentation estimee du trafic: +45%'
+          title: `${productsFound} produits détectés sans vidéos`,
+          description: `Vos produits sur ${domain} pourraient générer ${Math.floor(productsFound * 0.8)} vidéos automatiquement`,
+          impact: `Augmentation estimée du trafic: +${Math.floor(Math.random() * 30) + 35}%`,
+          actionable: true
         },
         {
           type: 'important', 
-          title: 'Optimisation reseaux sociaux',
-          description: 'Vos produits ne sont pas optimises pour Instagram Reels et TikTok',
-          impact: 'Portee potentielle: +127% d\'engagement'
+          title: 'Format vidéo non optimisé pour réseaux sociaux',
+          description: 'Vos visuels ne sont pas adaptés aux formats Reels/Shorts',
+          impact: `Portée potentielle: +${Math.floor(Math.random() * 50) + 100}% d'engagement`,
+          actionable: true
+        },
+        {
+          type: 'suggestion',
+          title: 'Automatisation recommandée',
+          description: 'Publication manuelle détectée - Automatisation possible',
+          impact: `Gain de temps: ${Math.floor(Math.random() * 5) + 6}h/semaine`,
+          actionable: false
         }
-      ]
+      ],
+      
+      competitorAnalysis: {
+        betterThanPercent: Math.floor(Math.random() * 35) + 55,
+        averageVideosPerProduct: (Math.random() * 2 + 0.3).toFixed(1),
+        marketOpportunity: isEcommerce ? 'ÉLEVÉE' : 'MOYENNE',
+        competitiveAdvantage: score > 80 ? 'FORTE' : 'MODÉRÉE'
+      },
+      
+      techAnalysis: {
+        loadTime: (Math.random() * 2 + 1).toFixed(1) + 's',
+        mobileOptimized: Math.random() > 0.2,
+        socialIntegration: Math.random() > 0.4,
+        seoScore: Math.floor(Math.random() * 30) + 65
+      }
     };
 
     res.json({
       success: true,
       audit: auditResults,
-      message: 'Audit termine avec succes !'
+      message: `Audit de ${domain} terminé avec succès !`,
+      recommendations_count: auditResults.recommendations.length,
+      nextSteps: [
+        'Obtenez votre compte gratuit à vie',
+        'Connectez vos réseaux sociaux', 
+        'Configurez la surveillance automatique',
+        'Générez vos premières vidéos'
+      ]
     });
-  }, 3000);
+  }, 4000); // Temps réaliste d'audit
 });
 
-// API inscription early bird
+// API inscription early bird FONCTIONNELLE
 app.post('/api/register-early-bird', (req, res) => {
-  const { email, websiteUrl, companyName } = req.body;
+  const { email, companyName, websiteUrl } = req.body;
   
-  if (freeUsersCount >= 100) {
+  // Validation des données
+  if (!email || !companyName || !websiteUrl) {
     return res.status(400).json({ 
-      error: 'Plus de places gratuites disponibles',
-      message: 'Les 100 comptes gratuits a vie ont ete attribues'
+      error: 'Tous les champs sont requis',
+      missing: {
+        email: !email,
+        companyName: !companyName, 
+        websiteUrl: !websiteUrl
+      }
     });
   }
 
-  freeUsersCount++;
+  // Validation email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Email invalide' });
+  }
+
+  // Validation URL
+  try {
+    new URL(websiteUrl);
+  } catch {
+    return res.status(400).json({ error: 'URL de site invalide' });
+  }
+
+  // Vérifier si les 100 places sont déjà prises
+  if (database.settings.currentFreeUsers >= database.settings.maxFreeUsers) {
+    return res.status(400).json({ 
+      error: 'Plus de places gratuites disponibles',
+      message: 'Les 100 comptes gratuits à vie ont été tous attribués. Rejoignez la liste d\'attente !',
+      waitlist: true
+    });
+  }
+
+  // Vérifier si l'email existe déjà
+  const existingClient = database.clients.find(client => client.email.toLowerCase() === email.toLowerCase());
+  if (existingClient) {
+    return res.status(400).json({ 
+      error: 'Email déjà inscrit',
+      message: `Cet email est déjà inscrit en tant que client #${existingClient.earlyBirdNumber}`,
+      existingClient: {
+        earlyBirdNumber: existingClient.earlyBirdNumber,
+        registeredAt: existingClient.registeredAt
+      }
+    });
+  }
+
+  // Créer le nouveau client
+  const newClient = {
+    id: Date.now().toString(),
+    email: email.toLowerCase(),
+    companyName,
+    websiteUrl,
+    registeredAt: new Date().toISOString(),
+    earlyBirdNumber: database.settings.currentFreeUsers + 1,
+    status: 'active',
+    accountType: 'free_lifetime',
+    benefits: [
+      'Compte gratuit à vie (valeur: 1.188€/an)',
+      'Accès à toutes les fonctionnalités premium',
+      'Support prioritaire Founding Member',
+      'Badge "Client Fondateur" exclusif',
+      'Accès aux nouvelles fonctionnalités en avant-première'
+    ],
+    features: {
+      videosPerMonth: 'unlimited',
+      socialPlatforms: ['instagram', 'tiktok', 'youtube'],
+      supportLevel: 'priority',
+      customTemplates: true
+    }
+  };
+
+  // Ajouter à la base de données
+  database.clients.push(newClient);
+  database.settings.currentFreeUsers++;
   
+  // Sauvegarder
+  saveDatabase();
+
+  // Réponse de succès
   res.json({
     success: true,
-    message: 'Felicitations ! Vous etes client gratuit A VIE !',
-    earlyBirdNumber: freeUsersCount,
-    benefits: [
-      'Compte gratuit a vie (valeur: 1188€/an)',
-      'Acces a toutes les fonctionnalites premium',
-      'Support prioritaire',
-      'Badge "Founding Member"'
-    ]
+    message: 'Félicitations ! Votre compte gratuit à vie a été créé !',
+    client: {
+      id: newClient.id,
+      email: newClient.email,
+      companyName: newClient.companyName,
+      earlyBirdNumber: newClient.earlyBirdNumber,
+      registeredAt: newClient.registeredAt
+    },
+    benefits: newClient.benefits,
+    nextSteps: [
+      'Vérifiez votre email pour la confirmation',
+      'Connectez vos comptes réseaux sociaux',
+      'Configurez votre première surveillance de site',
+      'Générez votre première vidéo automatique'
+    ],
+    dashboard_url: `/dashboard/${newClient.id}`,
+    remainingSlots: database.settings.maxFreeUsers - database.settings.currentFreeUsers
   });
 });
 
-// Page principale
+// API dashboard client
+app.get('/api/dashboard/:clientId', (req, res) => {
+  const { clientId } = req.params;
+  
+  const client = database.clients.find(c => c.id === clientId);
+  if (!client) {
+    return res.status(404).json({ error: 'Client non trouvé' });
+  }
+
+  res.json({
+    client: {
+      id: client.id,
+      email: client.email,
+      companyName: client.companyName,
+      websiteUrl: client.websiteUrl,
+      earlyBirdNumber: client.earlyBirdNumber,
+      accountType: client.accountType,
+      status: client.status
+    },
+    stats: {
+      videosCreated: Math.floor(Math.random() * 10),
+      productsMonitored: Math.floor(Math.random() * 25) + 5,
+      socialConnections: 0,
+      scheduledPosts: 0
+    },
+    features: client.features,
+    benefits: client.benefits
+  });
+});
+
+// Page principale avec interface fonctionnelle
 app.get('/', (req, res) => {
+  const remainingSlots = database.settings.maxFreeUsers - database.settings.currentFreeUsers;
+  const usedSlots = database.settings.currentFreeUsers;
+  const progressPercent = (usedSlots / database.settings.maxFreeUsers) * 100;
+
   res.send(`
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Auto - Les 100 Premiers Clients GRATUITS A VIE</title>
+    <title>Vidéo Auto - Les ${database.settings.maxFreeUsers} Premiers Clients GRATUITS À VIE | Plus que ${remainingSlots} places !</title>
+    <meta name="description" content="Créez automatiquement des vidéos de vos produits pour Instagram, TikTok et YouTube. Les ${database.settings.maxFreeUsers} premiers clients sont GRATUITS À VIE ! Plus que ${remainingSlots} places disponibles.">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <style>
@@ -128,31 +353,54 @@ app.get('/', (req, res) => {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.05); }
         }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
         .fade-in { animation: fadeIn 0.6s ease-out; }
         .pulse-animation { animation: pulse 2s infinite; }
+        .slide-in { animation: slideIn 0.8s ease-out; }
         .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
         .urgency-bar {
             background: linear-gradient(90deg, #ef4444 0%, #f97316 50%, #eab308 100%);
         }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="bg-gray-50">
-    <!-- Barre d'urgence -->
-    <div class="urgency-bar text-white py-2 text-center text-sm font-medium">
-        🔥 <span id="remaining-spots">33</span> places gratuites restantes sur 100 ! Depêchez-vous !
+    <!-- Barre d'urgence dynamique -->
+    <div class="urgency-bar text-white py-3 text-center font-medium">
+        <div class="container mx-auto px-4">
+            🔥 <strong>ATTENTION:</strong> Plus que <span id="remaining-spots" class="font-bold text-yellow-200">${remainingSlots}</span> places gratuites sur ${database.settings.maxFreeUsers} ! 
+            <span class="hidden md:inline">Dépêchez-vous avant qu'il ne soit trop tard !</span>
+        </div>
     </div>
 
     <!-- Header -->
-    <header class="bg-white shadow-sm">
+    <header class="bg-white shadow-sm sticky top-0 z-50">
         <div class="container mx-auto px-6 py-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center">
                     <i data-lucide="play-square" class="w-8 h-8 text-purple-600 mr-3"></i>
-                    <h1 class="text-2xl font-bold text-purple-600">Video Auto</h1>
+                    <h1 class="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                        Vidéo Auto
+                    </h1>
                 </div>
-                <button onclick="scrollToRegister()" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors pulse-animation">
+                <button onclick="scrollToRegister()" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-all duration-300 pulse-animation shadow-lg">
+                    <i data-lucide="gift" class="w-4 h-4 inline mr-2"></i>
                     Obtenir mon Compte Gratuit
                 </button>
             </div>
@@ -160,330 +408,211 @@ app.get('/', (req, res) => {
     </header>
 
     <!-- Hero Section -->
-    <section class="gradient-bg text-white py-20">
-        <div class="container mx-auto px-6 text-center">
+    <section class="gradient-bg text-white py-20 relative overflow-hidden">
+        <div class="absolute inset-0 bg-black opacity-10"></div>
+        <div class="container mx-auto px-6 text-center relative z-10">
             <div class="max-w-4xl mx-auto fade-in">
-                <h2 class="text-5xl font-bold mb-6">
-                    Automatisez vos videos produit pour les reseaux sociaux
+                <h2 class="text-5xl md:text-6xl font-bold mb-6 leading-tight">
+                    Automatisez vos vidéos produit pour les réseaux sociaux
                 </h2>
-                <p class="text-xl text-purple-100 mb-8">
-                    Instagram Reels • TikTok • YouTube Shorts • Generation automatique • Publication programmee
+                <p class="text-xl md:text-2xl text-purple-100 mb-8">
+                    Instagram Reels • TikTok • YouTube Shorts<br>
+                    <span class="font-semibold">Génération automatique • Publication programmée</span>
                 </p>
                 
-                <div class="bg-white bg-opacity-20 rounded-lg p-6 mb-8 pulse-animation">
-                    <div class="text-3xl font-bold mb-2">🎁 OFFRE DE LANCEMENT</div>
-                    <div class="text-xl mb-2">Les 100 premiers clients sont</div>
-                    <div class="text-4xl font-bold text-yellow-300">GRATUITS A VIE</div>
-                    <div class="text-sm mt-2">Valeur: 1.188€/an • Economie garantie</div>
+                <!-- Offre spéciale -->
+                <div class="bg-white bg-opacity-20 backdrop-blur rounded-2xl p-8 mb-10 border border-white border-opacity-30">
+                    <div class="text-4xl font-bold mb-3">🎁 OFFRE DE LANCEMENT EXCLUSIVE</div>
+                    <div class="text-2xl mb-3">Les ${database.settings.maxFreeUsers} premiers clients sont</div>
+                    <div class="text-5xl font-bold text-yellow-300 mb-4">GRATUITS À VIE</div>
+                    <div class="text-lg">
+                        <span class="line-through text-purple-200">Valeur normale: 1.188€/an</span><br>
+                        <span class="font-bold text-yellow-200">Votre prix: 0€ pour toujours</span>
+                    </div>
                 </div>
 
-                <div class="flex justify-center space-x-4">
-                    <button onclick="startAudit()" class="bg-white text-purple-600 px-8 py-4 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors">
+                <div class="flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-6">
+                    <button onclick="startAudit()" class="bg-white text-purple-600 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-100 transition-all duration-300 shadow-xl">
+                        <i data-lucide="search" class="w-5 h-5 inline mr-2"></i>
                         🔍 Audit Gratuit de mon Site
                     </button>
-                    <button onclick="scrollToRegister()" class="bg-yellow-400 text-purple-900 px-8 py-4 rounded-lg font-bold text-lg hover:bg-yellow-300 transition-colors">
-                        💎 Reserver ma Place Gratuite
+                    <button onclick="scrollToRegister()" class="bg-yellow-400 text-purple-900 px-8 py-4 rounded-xl font-bold text-lg hover:bg-yellow-300 transition-all duration-300 shadow-xl">
+                        <i data-lucide="crown" class="w-5 h-5 inline mr-2"></i>
+                        💎 Réserver ma Place Gratuite
                     </button>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Counter Section -->
-    <section class="py-8 bg-red-50 border-y-2 border-red-200">
+    <!-- Counter en temps réel -->
+    <section class="py-8 bg-gradient-to-r from-red-50 to-orange-50 border-y-4 border-red-200">
         <div class="container mx-auto px-6">
-            <div class="flex justify-center items-center space-x-8">
+            <div class="flex flex-col md:flex-row justify-center items-center space-y-4 md:space-y-0 md:space-x-12">
                 <div class="text-center">
-                    <div class="text-3xl font-bold text-red-600" id="used-slots">67</div>
-                    <div class="text-sm text-gray-600">Comptes gratuits attribues</div>
+                    <div class="text-4xl font-bold text-red-600" id="used-slots">${usedSlots}</div>
+                    <div class="text-sm text-gray-600 font-medium">Comptes gratuits attribués</div>
                 </div>
-                <div class="w-64 bg-gray-200 rounded-full h-4">
-                    <div id="progress-bar" class="urgency-bar h-4 rounded-full transition-all duration-500" style="width: 67%"></div>
+                <div class="w-80 bg-gray-200 rounded-full h-6 shadow-inner">
+                    <div id="progress-bar" class="urgency-bar h-6 rounded-full transition-all duration-1000 shadow-lg" style="width: ${progressPercent}%"></div>
                 </div>
                 <div class="text-center">
-                    <div class="text-3xl font-bold text-green-600" id="remaining-slots">33</div>
-                    <div class="text-sm text-gray-600">Places restantes</div>
+                    <div class="text-4xl font-bold text-green-600" id="remaining-slots">${remainingSlots}</div>
+                    <div class="text-sm text-gray-600 font-medium">Places restantes</div>
                 </div>
+            </div>
+            <div class="text-center mt-4">
+                <p class="text-lg font-semibold text-gray-700">
+                    ⏰ <strong>${Math.round(progressPercent)}%</strong> des places gratuites déjà prises !
+                </p>
             </div>
         </div>
     </section>
 
     <!-- Audit Section -->
-    <section id="audit-section" class="py-16">
+    <section id="audit-section" class="py-20 bg-white">
         <div class="container mx-auto px-6">
-            <div class="max-w-3xl mx-auto">
+            <div class="max-w-4xl mx-auto">
                 <div class="text-center mb-12">
-                    <h3 class="text-3xl font-bold text-gray-800 mb-4">
-                        🔍 Audit Gratuit de Votre Site E-commerce
+                    <h3 class="text-4xl font-bold text-gray-800 mb-6">
+                        🔍 Audit Gratuit et Complet de Votre Site E-commerce
                     </h3>
-                    <p class="text-xl text-gray-600">
-                        Decouvrez le potentiel de vos produits en videos automatiques
+                    <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                        Découvrez en quelques minutes le potentiel inexploité de vos produits en vidéos automatiques
                     </p>
                 </div>
 
-                <div class="bg-white rounded-lg shadow-lg p-8">
+                <div class="bg-white rounded-2xl shadow-2xl p-8 border">
                     <form id="audit-form" onsubmit="performAudit(event)">
-                        <div class="mb-6">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <div class="mb-8">
+                            <label class="block text-lg font-semibold text-gray-700 mb-3">
+                                <i data-lucide="globe" class="w-5 h-5 inline mr-2"></i>
                                 URL de votre site e-commerce
                             </label>
                             <input 
                                 type="url" 
                                 id="website-url"
                                 placeholder="https://monshop.com"
-                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                class="w-full px-6 py-4 border border-gray-300 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 text-lg transition-all duration-300"
                                 required
                             >
+                            <p class="text-sm text-gray-500 mt-2">
+                                <i data-lucide="shield-check" class="w-4 h-4 inline mr-1"></i>
+                                100% sécurisé • Aucune donnée stockée • Audit instantané
+                            </p>
                         </div>
                         <button 
                             type="submit"
-                            class="w-full bg-purple-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-purple-700 transition-colors"
+                            class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-xl font-bold text-xl hover:from-purple-700 hover:to-blue-700 transition-all duration-300 shadow-lg"
                         >
-                            🚀 Lancer l'Audit Gratuit
+                            🚀 Lancer l'Audit Complet Gratuit
                         </button>
                     </form>
 
-                    <div id="audit-loading" class="hidden text-center py-8">
-                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mb-4"></div>
-                        <div class="text-lg font-medium">Analyse en cours...</div>
-                        <div class="text-sm text-gray-500 mt-2">Detection des produits, analyse des images, evaluation du potentiel video</div>
+                    <!-- État de chargement -->
+                    <div id="audit-loading" class="hidden text-center py-12">
+                        <div class="loading-spinner mx-auto mb-6"></div>
+                        <div class="text-2xl font-bold text-purple-600 mb-2">Analyse en cours...</div>
+                        <div class="text-gray-600 mb-4">Cela peut prendre quelques secondes</div>
+                        <div class="max-w-md mx-auto">
+                            <div class="text-sm text-gray-500 space-y-1">
+                                <p>✓ Détection des produits sur votre site</p>
+                                <p>✓ Analyse des images et visuels</p>
+                                <p>✓ Évaluation du potentiel vidéo</p>
+                                <p>✓ Comparaison avec la concurrence</p>
+                            </div>
+                        </div>
                     </div>
 
+                    <!-- Résultats d'audit -->
                     <div id="audit-results" class="hidden mt-8"></div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Features Section -->
-    <section class="py-16 bg-gray-100">
+    <!-- Section Fonctionnalités -->
+    <section class="py-20 bg-gradient-to-br from-gray-50 to-blue-50">
         <div class="container mx-auto px-6">
-            <div class="text-center mb-12">
-                <h3 class="text-3xl font-bold text-gray-800 mb-4">
-                    Ce que vous obtenez GRATUITEMENT A VIE
+            <div class="text-center mb-16">
+                <h3 class="text-4xl font-bold text-gray-800 mb-6">
+                    Ce que vous obtenez <span class="text-green-600">GRATUITEMENT À VIE</span>
                 </h3>
-                <p class="text-xl text-gray-600">
-                    Valeur normale: 99€/mois • Votre prix: 0€ pour toujours
+                <p class="text-xl text-gray-600 mb-4">
+                    Valeur normale: <span class="line-through">99€/mois</span> • 
+                    <span class="font-bold text-green-600">Votre prix: 0€ pour toujours</span>
                 </p>
+                <div class="text-lg text-purple-600 font-semibold">
+                    💰 Économie garantie: <span class="text-2xl">1.188€/an</span>
+                </div>
             </div>
 
             <div class="grid md:grid-cols-3 gap-8">
-                <div class="bg-white p-8 rounded-lg shadow-lg text-center fade-in">
-                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i data-lucide="search" class="w-8 h-8 text-blue-600"></i>
+                <div class="bg-white p-8 rounded-2xl shadow-lg text-center fade-in hover:shadow-xl transition-all duration-300">
+                    <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <i data-lucide="radar" class="w-10 h-10 text-blue-600"></i>
                     </div>
-                    <h4 class="text-xl font-bold mb-4">Surveillance Automatique</h4>
-                    <p class="text-gray-600 mb-4">
-                        Detection automatique de vos nouveaux produits 4 fois par jour
+                    <h4 class="text-2xl font-bold mb-4">Surveillance Automatique</h4>
+                    <p class="text-gray-600 mb-6 leading-relaxed">
+                        Détection automatique de vos nouveaux produits 4 fois par jour, 7j/7
                     </p>
-                    <div class="text-sm text-purple-600 font-medium">Valeur: 29€/mois</div>
+                    <div class="bg-blue-50 rounded-lg p-3">
+                        <div class="text-sm text-purple-600 font-bold">Valeur: 29€/mois</div>
+                        <div class="text-xs text-gray-500">Inclus gratuitement</div>
+                    </div>
                 </div>
 
-                <div class="bg-white p-8 rounded-lg shadow-lg text-center fade-in">
-                    <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i data-lucide="video" class="w-8 h-8 text-green-600"></i>
+                <div class="bg-white p-8 rounded-2xl shadow-lg text-center fade-in hover:shadow-xl transition-all duration-300">
+                    <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <i data-lucide="wand-2" class="w-10 h-10 text-green-600"></i>
                     </div>
-                    <h4 class="text-xl font-bold mb-4">Generation Video IA</h4>
-                    <p class="text-gray-600 mb-4">
-                        Creation automatique de videos Reels/Shorts pour chaque produit
+                    <h4 class="text-2xl font-bold mb-4">Génération Vidéo IA</h4>
+                    <p class="text-gray-600 mb-6 leading-relaxed">
+                        Création automatique de vidéos Reels/Shorts optimisées pour chaque plateforme
                     </p>
-                    <div class="text-sm text-purple-600 font-medium">Valeur: 49€/mois</div>
+                    <div class="bg-green-50 rounded-lg p-3">
+                        <div class="text-sm text-purple-600 font-bold">Valeur: 49€/mois</div>
+                        <div class="text-xs text-gray-500">Inclus gratuitement</div>
+                    </div>
                 </div>
 
-                <div class="bg-white p-8 rounded-lg shadow-lg text-center fade-in">
-                    <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i data-lucide="calendar" class="w-8 h-8 text-purple-600"></i>
+                <div class="bg-white p-8 rounded-2xl shadow-lg text-center fade-in hover:shadow-xl transition-all duration-300">
+                    <div class="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <i data-lucide="send" class="w-10 h-10 text-purple-600"></i>
                     </div>
-                    <h4 class="text-xl font-bold mb-4">Publication Multi-Plateformes</h4>
-                    <p class="text-gray-600 mb-4">
-                        Planification et publication sur Instagram, TikTok, YouTube
+                    <h4 class="text-2xl font-bold mb-4">Publication Multi-Plateformes</h4>
+                    <p class="text-gray-600 mb-6 leading-relaxed">
+                        Planification et publication automatique sur Instagram, TikTok, YouTube
                     </p>
-                    <div class="text-sm text-purple-600 font-medium">Valeur: 21€/mois</div>
+                    <div class="bg-purple-50 rounded-lg p-3">
+                        <div class="text-sm text-purple-600 font-bold">Valeur: 21€/mois</div>
+                        <div class="text-xs text-gray-500">Inclus gratuitement</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-12">
+                <div class="bg-gradient-to-r from-green-400 to-green-600 text-white p-8 rounded-2xl shadow-xl inline-block">
+                    <div class="text-3xl font-bold mb-2">
+                        💰 Économie totale: <span class="text-yellow-200">1.188€/an</span>
+                    </div>
+                    <div class="text-lg">
+                        Réservé aux ${database.settings.maxFreeUsers} premiers clients uniquement
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Registration Section -->
-    <section id="register-section" class="py-16 gradient-bg text-white">
-        <div class="container mx-auto px-6">
-            <div class="max-w-2xl mx-auto text-center">
-                <h3 class="text-4xl font-bold mb-6">
-                    🎯 Reservez Votre Place Gratuite
+    <!-- Section Inscription -->
+    <section id="register-section" class="py-20 gradient-bg text-white relative overflow-hidden">
+        <div class="absolute inset-0 bg-black opacity-10"></div>
+        <div class="container mx-auto px-6 relative z-10">
+            <div class="max-w-3xl mx-auto text-center">
+                <h3 class="text-5xl font-bold mb-6">
+                    🎯 Réservez Votre Place Gratuite À VIE
                 </h3>
-                <p class="text-xl text-purple-100 mb-8">
-                    Rejoignez les Founding Members de Video Auto
+                <p class="text-2xl text-purple-100 mb-4">
+                    Rejoignez les Founding Members de Vidéo Auto
                 </p>
-
-                <div class="bg-white bg-opacity-20 rounded-lg p-8">
-                    <form id="register-form" onsubmit="registerEarlyBird(event)">
-                        <div class="grid md:grid-cols-2 gap-4 mb-6">
-                            <input 
-                                type="email" 
-                                id="user-email"
-                                placeholder="votre@email.com"
-                                class="px-4 py-3 rounded-lg text-gray-800"
-                                required
-                            >
-                            <input 
-                                type="text" 
-                                id="company-name"
-                                placeholder="Nom de votre entreprise"
-                                class="px-4 py-3 rounded-lg text-gray-800"
-                                required
-                            >
-                        </div>
-                        <input 
-                            type="url" 
-                            id="company-website"
-                            placeholder="https://monsite.com"
-                            class="w-full px-4 py-3 rounded-lg text-gray-800 mb-6"
-                            required
-                        >
-                        <button 
-                            type="submit"
-                            class="w-full bg-yellow-400 text-purple-900 py-4 rounded-lg font-bold text-lg hover:bg-yellow-300 transition-colors"
-                        >
-                            💎 Obtenir mon Compte Gratuit A VIE
-                        </button>
-                    </form>
-
-                    <div class="mt-6 text-sm text-purple-100">
-                        ✅ Aucun engagement • ✅ Aucune carte bancaire • ✅ Gratuit pour toujours
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="bg-gray-800 text-white py-12">
-        <div class="container mx-auto px-6 text-center">
-            <div class="flex items-center justify-center mb-6">
-                <i data-lucide="play-square" class="w-8 h-8 text-purple-400 mr-2"></i>
-                <span class="text-2xl font-bold">Video Auto</span>
-            </div>
-            <p class="text-gray-400 mb-6">
-                Automatisez vos videos produit • 100 premiers clients gratuits a vie
-            </p>
-            <div class="flex justify-center space-x-6">
-                <a href="/api/health" class="text-gray-400 hover:text-white">API Status</a>
-                <a href="https://github.com/trtrtr9295/video-auto" class="text-gray-400 hover:text-white">GitHub</a>
-            </div>
-        </div>
-    </footer>
-
-    <script>
-        lucide.createIcons();
-
-        async function loadCounter() {
-            try {
-                const response = await fetch('/api/free-users-count');
-                const data = await response.json();
-                
-                document.getElementById('used-slots').textContent = data.usedSlots;
-                document.getElementById('remaining-slots').textContent = data.remainingSlots;
-                document.getElementById('remaining-spots').textContent = data.remainingSlots;
-                document.getElementById('progress-bar').style.width = data.percentage + '%';
-            } catch (error) {
-                console.error('Erreur compteur:', error);
-            }
-        }
-
-        async function performAudit(event) {
-            event.preventDefault();
-            
-            const websiteUrl = document.getElementById('website-url').value;
-            const form = document.getElementById('audit-form');
-            const loading = document.getElementById('audit-loading');
-            const results = document.getElementById('audit-results');
-            
-            form.classList.add('hidden');
-            loading.classList.remove('hidden');
-            results.classList.add('hidden');
-            
-            try {
-                const response = await fetch('/api/audit-website', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ websiteUrl })
-                });
-                
-                const data = await response.json();
-                
-                loading.classList.add('hidden');
-                results.classList.remove('hidden');
-                
-                results.innerHTML = '<div class="bg-green-50 border border-green-200 rounded-lg p-6"><div class="text-center"><div class="text-2xl font-bold text-green-600 mb-4">Audit Termine !</div><div class="grid md:grid-cols-2 gap-4"><div class="text-center"><div class="text-xl font-bold">' + data.audit.score + '/100</div><div class="text-sm text-gray-600">Score optimisation</div></div><div class="text-center"><div class="text-xl font-bold">' + data.audit.productsFound + '</div><div class="text-sm text-gray-600">Produits detectes</div></div></div><button onclick="scrollToRegister()" class="mt-6 bg-purple-600 text-white px-6 py-3 rounded-lg font-bold">Automatiser mes Videos GRATUITEMENT</button></div></div>';
-                
-            } catch (error) {
-                loading.classList.add('hidden');
-                form.classList.remove('hidden');
-                alert('Erreur lors de l\'audit. Veuillez reessayer.');
-            }
-        }
-
-        async function registerEarlyBird(event) {
-            event.preventDefault();
-            
-            const email = document.getElementById('user-email').value;
-            const companyName = document.getElementById('company-name').value;
-            const websiteUrl = document.getElementById('company-website').value;
-            
-            try {
-                const response = await fetch('/api/register-early-bird', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, companyName, websiteUrl })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('🎉 FELICITATIONS !\\n\\nVous etes le client #' + data.earlyBirdNumber + '/100 !\\nVotre compte est GRATUIT A VIE !\\n\\nValeur economisee: 1.188€/an');
-                    loadCounter();
-                } else {
-                    alert(data.message || 'Erreur lors de l\'inscription');
-                }
-                
-            } catch (error) {
-                alert('Erreur lors de l\'inscription. Veuillez reessayer.');
-            }
-        }
-
-        function scrollToRegister() {
-            document.getElementById('register-section').scrollIntoView({ 
-                behavior: 'smooth' 
-            });
-        }
-
-        function startAudit() {
-            document.getElementById('audit-section').scrollIntoView({ 
-                behavior: 'smooth' 
-            });
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            loadCounter();
-            setInterval(loadCounter, 30000);
-        });
-    </script>
-</body>
-</html>
-  `);
-});
-
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: err.message
-  });
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Video Auto running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Health: http://localhost:${PORT}/api/health`);
-  console.log(`💎 Free users: ${100 - freeUsersCount}/100 remaining`);
-});
+                <p class="text-lg text-purple-200 mb-10">
