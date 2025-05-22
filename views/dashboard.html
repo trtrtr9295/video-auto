@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Vidéo Auto</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        /* Styles spécifiques au dashboard */
+        .dashboard-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        .user-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .user-badge {
+            background: var(--accent-color);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-md);
+            text-align: center;
+            transition: var(--transition);
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .stat-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        
+        .quick-actions {
+            background: white;
+            border-radius: var(--border-radius-lg);
+            padding: 2rem;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 2rem;
+        }
+        
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .projects-section {
+            background: white;
+            border-radius: var(--border-radius-lg);
+            padding: 2rem;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 2rem;
+        }
+        
+        .project-list {
+            display: grid;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .project-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius);
+            transition: var(--transition);
+        }
+        
+        .project-item:hover {
+            border-color: var(--primary-color);
+            background: var(--bg-secondary);
+        }
+        
+        .project-info h4 {
+            margin-bottom: 0.25rem;
+            color: var(--text-dark);
+        }
+        
+        .project-meta {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        
+        .project-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .videos-section {
+            background: white;
+            border-radius: var(--border-radius-lg);
+            padding: 2rem;
+            box-shadow: var(--shadow-md);
+        }
+        
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        
+        .video-card {
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            transition: var(--transition);
+        }
+        
+        .video-card:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+        
+        .video-thumbnail {
+            width: 100%;
+            height: 160px;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 3rem;
+        }
+        
+        .video-info {
+            padding: 1rem;
+        }
+        
+        .video-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-dark);
+        }
+        
+        .video-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+        
+        .video-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+        }
+        
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .user-info {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .action-buttons {
+                grid-template-columns: 1fr;
+            }
+            
+            .project-item {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+            
+            .video-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header du Dashboard -->
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="user-info">
+                <div>
+                    <h1>👋 Bonjour, <span id="userName">Utilisateur</span></h1>
+                    <div class="user-badge">
+                        Compte Gratuit à Vie #<span id="accountNumber">1</span>/100
+                    </div>
+                </div>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <button class="btn btn-outline" onclick="showNotifications()">
+                        🔔 <span id="notificationCount">3</span>
+                    </button>
+                    <button class="btn btn-outline" onclick="logout()">
+                        Déconnexion
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenu Principal -->
+    <main class="container">
+        <!-- Statistiques -->
+        <section class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">📁</div>
+                <div class="stat-value" id="projectsCount">0</div>
+                <div class="stat-label">Projets Créés</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🎬</div>
+                <div class="stat-value" id="videosCount">0</div>
+                <div class="stat-label">Vidéos Générées</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">👀</div>
+                <div class="stat-value" id="viewsCount">0</div>
+                <div class="stat-label">Vues Totales</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📈</div>
+                <div class="stat-value" id="engagementRate">0%</div>
+                <div class="stat-label">Taux d'Engagement</div>
+            </div>
+        </section>
+
+        <!-- Actions Rapides -->
+        <section class="quick-actions">
+            <h2>🚀 Actions Rapides</h2>
+            <div class="action-buttons">
+                <button class="btn btn-primary btn-lg" onclick="createProject()">
+                    ➕ Nouveau Projet
+                </button>
+                <button class="btn btn-success btn-lg" onclick="generateVideo()">
+                    🎬 Générer Vidéo
+                </button>
+                <button class="btn btn-info btn-lg" onclick="viewAnalytics()">
+                    📊 Analytics
+                </button>
+                <button class="btn btn-warning btn-lg" onclick="schedulePost()">
+                    📅 Programmer Post
+                </button>
+            </div>
+        </section>
+
+        <!-- Projets Récents -->
+        <section class="projects-section">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>📁 Mes Projets Récents</h2>
+                <button class="btn btn-outline" onclick="viewAllProjects()">
+                    Voir Tous
+                </button>
+            </div>
+            
+            <div id="projectsList" class="project-list">
+                <!-- Projets seront chargés dynamiquement -->
+                <div class="empty-state">
+                    <div class="empty-state-icon">📁</div>
+                    <h3>Aucun projet pour le moment</h3>
+                    <p>Créez votre premier projet pour commencer à générer des vidéos</p>
+                    <button class="btn btn-primary" onclick="createProject()">
+                        Créer mon Premier Projet
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Vidéos Récentes -->
+        <section class="videos-section">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>🎬 Mes Vidéos Récentes</h2>
+                <button class="btn btn-outline" onclick="viewAllVideos()">
+                    Voir Toutes
+                </button>
+            </div>
+            
+            <div id="videosList" class="video-grid">
+                <!-- Vidéos seront chargées dynamiquement -->
+                <div class="empty-state">
+                    <div class="empty-state-icon">🎬</div>
+                    <h3>Aucune vidéo générée</h3>
+                    <p>Créez un projet et générez vos premières vidéos IA</p>
+                    <button class="btn btn-success" onclick="generateVideo()">
+                        Générer ma Première Vidéo
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal de Création de Projet -->
+    <div id="createProjectModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🎬 Nouveau Projet</h3>
+                <button class="modal-close" onclick="closeModal('createProjectModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createProjectForm">
+                    <div class="form-group">
+                        <label class="form-label">Nom du Projet</label>
+                        <input type="text" class="form-control" id="projectName" placeholder="Ex: Boutique Mode Automne 2024" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">URL du Site Web</label>
+                        <input type="url" class="form-control" id="projectWebsite" placeholder="https://votre-boutique.com" required>
+                        <div class="form-text">Notre IA va analyser automatiquement vos produits</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Catégorie</label>
+                        <select class="form-control" id="projectCategory" required>
+                            <option value="">Sélectionnez une catégorie</option>
+                            <option value="fashion">Mode & Vêtements</option>
+                            <option value="electronics">Électronique</option>
+                            <option value="beauty">Beauté & Cosmétiques</option>
+                            <option value="home">Maison & Décoration</option>
+                            <option value="sports">Sport & Loisirs</option>
+                            <option value="food">Alimentation</option>
+                            <option value="other">Autre</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('createProjectModal')">Annuler</button>
+                <button class="btn btn-primary" onclick="submitCreateProject()">
+                    <span class="spinner d-none" id="createProjectSpinner"></span>
+                    Créer le Projet
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Notifications -->
+    <div id="notificationsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔔 Notifications</h3>
+                <button class="modal-close" onclick="closeModal('notificationsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="notificationsList">
+                    <div class="alert alert-info">
+                        <strong>🎉 Bienvenue !</strong> Votre compte gratuit à vie est activé.
+                    </div>
+                    <div class="alert alert-success">
+                        <strong>✅ Système opérationnel</strong> Toutes les fonctionnalités sont disponibles.
+                    </div>
+                    <div class="alert alert-warning">
+                        <strong>🚀 Nouveauté</strong> Génération IA maintenant disponible !
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let userData = null;
+        let projectsData = [];
+        let videosData = [];
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            initDashboard();
+        });
+
+        async function initDashboard() {
+            try {
+                await loadUserData();
+                await loadProjects();
+                await loadVideos();
+                updateStats();
+                updateUI();
+            } catch (error) {
+                console.error('Erreur initialisation dashboard:', error);
+                showAlert('Erreur de chargement des données', 'danger');
+            }
+        }
+
+        async function loadUserData() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/';
+                return;
+            }
+
+            // Simuler les données utilisateur pour le moment
+            userData = {
+                name: 'Utilisateur Test',
+                email: 'test@example.com',
+                accountNumber: 1
+            };
+
+            document.getElementById('userName').textContent = userData.name;
+            document.getElementById('accountNumber').textContent = userData.accountNumber;
+        }
+
+        async function loadProjects() {
+            try {
+                const response = await fetch('/api/projects', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    projectsData = data.projects || [];
+                } else {
+                    projectsData = [];
+                }
+            } catch (error) {
+                console.error('Erreur chargement projets:', error);
+                projectsData = [];
+            }
+        }
+
+        async function loadVideos() {
+            try {
+                const response = await fetch('/api/videos', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    videosData = data.videos || [];
+                } else {
+                    videosData = [];
+                }
+            } catch (error) {
+                console.error('Erreur chargement vidéos:', error);
+                videosData = [];
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('projectsCount').textContent = projectsData.length;
+            document.getElementById('videosCount').textContent = videosData.length;
+            
+            // Calculer les vues totales (simulé)
+            const totalViews = videosData.reduce((sum, video) => sum + (video.views || Math.floor(Math.random() * 1000)), 0);
+            document.getElementById('viewsCount').textContent = totalViews.toLocaleString();
+            
+            // Calculer le taux d'engagement (simulé)
+            const avgEngagement = videosData.length > 0 ? (Math.random() * 15 + 5).toFixed(1) : 0;
+            document.getElementById('engagementRate').textContent = avgEngagement + '%';
+        }
+
+        function updateUI() {
+            updateProjectsList();
+            updateVideosList();
+        }
+
+        function updateProjectsList() {
+            const container = document.getElementById('projectsList');
+            
+            if (projectsData.length === 0) {
+                return; // Garder l'état vide
+            }
+
+            container.innerHTML = projectsData.slice(0, 3).map(project => `
+                <div class="project-item">
+                    <div class="project-info">
+                        <h4>${project.name}</h4>
+                        <div class="project-meta">
+                            ${project.website} • ${project.products?.length || 0} produits
+                        </div>
+                    </div>
+                    <div class="project-actions">
+                        <button class="btn btn-sm btn-info" onclick="viewProject('${project.id}')">
+                            Voir
+                        </button>
+                        <button class="btn btn-sm btn-success" onclick="generateFromProject('${project.id}')">
+                            Générer
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateVideosList() {
+            const container = document.getElementById('videosList');
+            
+            if (videosData.length === 0) {
+                return; // Garder l'état vide
+            }
+
+            container.innerHTML = videosData.slice(0, 6).map(video => `
+                <div class="video-card">
+                    <div class="video-thumbnail">
+                        🎬
+                    </div>
+                    <div class="video-info">
+                        <div class="video-title">${video.productName || 'Vidéo'}</div>
+                        <div class="video-meta">
+                            <span class="badge badge-${video.style || 'primary'}">${video.style || 'moderne'}</span>
+                            <span>${video.platform || 'instagram'}</span>
+                        </div>
+                        <div class="video-actions">
+                            <button class="btn btn-sm btn-info" onclick="viewVideo('${video.id}')">
+                                ▶️
+                            </button>
+                            <button class="btn btn-sm btn-success" onclick="downloadVideo('${video.id}')">
+                                📥
+                            </button>
+                            <button class="btn btn-sm btn-warning" onclick="scheduleVideo('${video.id}')">
+                                📅
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Actions principales
+        function createProject() {
+            document.getElementById('createProjectModal').classList.add('show');
+        }
+
+        function generateVideo() {
+            if (projectsData.length === 0) {
+                showAlert('Créez d\'abord un projet pour générer des vidéos', 'warning');
+                return;
+            }
+            
+            // Rediriger vers la page de génération
+            window.location.href = `/project/${projectsData[0].id}`;
+        }
+
+        function viewAnalytics() {
+            showAlert('Analytics - Fonctionnalité bientôt disponible!', 'info');
+        }
+
+        function schedulePost() {
+            if (videosData.length === 0) {
+                showAlert('Générez d\'abord des vidéos pour les programmer', 'warning');
+                return;
+            }
+            
+            showAlert('Programmation - Fonctionnalité bientôt disponible!', 'info');
+        }
+
+        // Soumission du formulaire de projet
+        async function submitCreateProject() {
+            const form = document.getElementById('createProjectForm');
+            const formData = new FormData(form);
+            
+            const projectData = {
+                name: document.getElementById('projectName').value,
+                website: document.getElementById('projectWebsite').value,
+                category: document.getElementById('projectCategory').value
+            };
+
+            if (!projectData.name || !projectData.website || !projectData.category) {
+                showAlert('Veuillez remplir tous les champs', 'warning');
+                return;
+            }
+
+            const spinner = document.getElementById('createProjectSpinner');
+            spinner.classList.remove('d-none');
+
+            try {
+                const response = await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify(projectData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showAlert('Projet créé avec succès!', 'success');
+                    closeModal('createProjectModal');
+                    form.reset();
+                    await loadProjects();
+                    updateUI();
+                } else {
+                    showAlert('Erreur: ' + result.error, 'danger');
+                }
+
+            } catch (error) {
+                console.error('Erreur création projet:', error);
+                showAlert('Erreur de connexion', 'danger');
+            } finally {
+                spinner.classList.add('d-none');
+            }
+        }
+
+        // Fonctions utilitaires
+        function showAlert(message, type = 'info') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            alertDiv.style.position = 'fixed';
+            alertDiv.style.top = '20px';
+            alertDiv.style.right = '20px';
+            alertDiv.style.zIndex = '1001';
+            alertDiv.style.minWidth = '300px';
+
+            document.body.appendChild(alertDiv);
+
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+
+        function showNotifications() {
+            document.getElementById('notificationsModal').classList.add('show');
+        }
+
+        function viewProject(projectId) {
+            window.location.href = `/project/${projectId}`;
+        }
+
+        function generateFromProject(projectId) {
+            window.location.href = `/project/${projectId}`;
+        }
+
+        function viewAllProjects() {
+            window.location.href = '/projects';
+        }
+
+        function viewAllVideos() {
+            window.location.href = '/videos';
+        }
+
+        function viewVideo(videoId) {
+            window.location.href = `/video/${videoId}`;
+        }
+
+        function downloadVideo(videoId) {
+            window.location.href = `/api/videos/${videoId}/download`;
+        }
+
+        function scheduleVideo(videoId) {
+            showAlert('Programmation vidéo - Fonctionnalité bientôt disponible!', 'info');
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/';
+        }
+
+        // Fermer les modals en cliquant à l'extérieur
+        window.addEventListener('click', function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('show');
+            }
+        });
+
+        // Raccourcis clavier
+        document.addEventListener('keydown', function(event) {
+            // Ctrl/Cmd + N = Nouveau projet
+            if ((event.ctrlKey || event.metaKey) && event.key === 'n') {
+                event.preventDefault();
+                createProject();
+            }
+            
+            // Escape = Fermer les modals
+            if (event.key === 'Escape') {
+                document.querySelectorAll('.modal.show').forEach(modal => {
+                    modal.classList.remove('show');
+                });
+            }
+        });
+
+        // Auto-refresh des données toutes les 5 minutes
+        setInterval(async () => {
+            try {
+                await loadProjects();
+                await loadVideos();
+                updateStats();
+                updateUI();
+            } catch (error) {
+                console.error('Erreur auto-refresh:', error);
+            }
+        }, 5 * 60 * 1000);
+
+        console.log('✅ Dashboard initialisé avec succès');
+    </script>
+</body>
+</html>
